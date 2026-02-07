@@ -1,20 +1,66 @@
-# 2026_OpenCV_project_dusdn
+import cv2
+import mediapipe as mp
+import time
 
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
 
-open cv를 활용하여 손과 팔의 움직임을 감지하는 타이머를 제작 할 것이다.
+# ----------------------------------------------------------------
+# 성능 최적화 설정
+# model_complexity=0 : 성능 위주 (Lite 모델) / 1 : 기본 / 2 : 정확도 위주
+# ----------------------------------------------------------------
+hands = mp_hands.Hands(
+    static_image_mode=False,
+    max_num_hands=2,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5,
+    model_complexity=0) # 0으로 설정하여 속도 향상
 
+cap = cv2.VideoCapture(0)
 
-제작 계기: 기존에 시간을 측정하는 방식은 단순히 얼마나의 시간이 지났는지만을 보여준다.        
-이는 오븐이나 알람시계 등에는 효과적으로 작용하지만, 구체적으로 어떤 행위를 할 때만의 시간의 측정에는 알맞지 않다.            
-예를 들어 학생들이 기존의 타이머를 활용해 공부 시간을 측정할 때, 공부의 시작 시각과 끝 시각의 차만 측정하지 정말 공부릃 한 시간은 알 수 없다.                        
-이렇게 되면 타이머를 활용해 공부 시간을 재는게 의미가 없어진다.          
-이를 보완하고자 OpenCv를 활용해 '공부'를 하고있는 시간만 측정하는 타이머를 만들고자 한다.
+# (선택) 해상도를 줄이면 FPS가 더 올라갑니다. 필요 시 주석 해제하세요.
+# cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+# cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
+print("종료하려면 'q' 키를 누르세요.")
 
-제작 방법: OpenCV를 사용해 카메라 감지 범위 내 움직임의 유무를 확인한다.                      
-움직임이 감지되고 있다면 타이머를 작동시킨다.                          
-움직임이 감지되지 않는다면 타이머를 멈춘다.                      
+prev_time = 0
 
+while cap.isOpened():
+    success, image = cap.read()
+    if not success:
+        print("카메라를 찾을 수 없습니다.")
+        continue
 
-보완할 점:움직임이 감지되고 있다고 해도 집중을 하지 못하고 있는 상황이 있다.                      
-이 부분에 대해서는 조금 더 생각이 필요하다.                      
+    image.flags.writeable = False
+    
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+    results = hands.process(image_rgb)
+
+    image.flags.writeable = True
+    
+    if results.multi_hand_landmarks:
+        for hand_landmarks in results.multi_hand_landmarks:
+            mp_drawing.draw_landmarks(
+                image,
+                hand_landmarks, 
+                mp_hands.HAND_CONNECTIONS,
+                mp_drawing.DrawingSpec(color=(248, 144, 0), thickness=3, circle_radius=2),
+                mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=3, circle_radius=1)
+            )
+
+    curr_time = time.time()
+    fps = 1 / (curr_time - prev_time)
+    prev_time = curr_time
+    image = cv2.flip(image, 1)
+    cv2.putText(image, f"FPS: {int(fps)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    
+    cv2.imshow('Optimized Hand Detection', image)
+
+    if cv2.waitKey(5) & 0xFF == ord('q'):
+        break
+
+hands.close()
+cap.release()
+cv2.destroyAllWindows()
